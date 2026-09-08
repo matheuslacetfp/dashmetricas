@@ -31,14 +31,45 @@ def format_timestamp(seconds: float) -> str:
 
 def download_audio(url: str, destination: str) -> str:
     output_template = os.path.join(destination, "audio.%(ext)s")
-    options = {
-        "format": "bestaudio/best",
-        "outtmpl": output_template,
-        "quiet": True,
-        "no_warnings": True,
-    }
-    with yt_dlp.YoutubeDL(options) as downloader:
-        downloader.download([url])
+    client_profiles = (
+        ["android_vr", "web_safari"],
+        ["android", "web"],
+    )
+    last_error = None
+
+    for player_clients in client_profiles:
+        options = {
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
+            "outtmpl": output_template,
+            "quiet": True,
+            "no_warnings": True,
+            "noplaylist": True,
+            "retries": 3,
+            "fragment_retries": 3,
+            "http_headers": {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/131.0.0.0 Safari/537.36"
+                )
+            },
+            "extractor_args": {
+                "youtube": {
+                    "player_client": player_clients,
+                }
+            },
+        }
+        try:
+            with yt_dlp.YoutubeDL(options) as downloader:
+                downloader.download([url])
+            break
+        except Exception as error:
+            last_error = error
+    else:
+        raise RuntimeError(
+            "O YouTube bloqueou o download a partir do servidor do Streamlit "
+            "(HTTP 403). Tente outro vídeo ou execute a versão local do app."
+        ) from last_error
 
     downloaded_files = [
         os.path.join(destination, filename)
