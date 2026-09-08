@@ -158,10 +158,26 @@ with st.sidebar:
         "O arquivo temporário é removido ao final."
     )
 
-url = st.text_input(
-    "Link do vídeo do YouTube",
-    placeholder="https://www.youtube.com/watch?v=...",
+source = st.radio(
+    "Fonte do áudio",
+    ("Link do YouTube", "Enviar arquivo"),
+    horizontal=True,
 )
+
+url = ""
+uploaded_file = None
+if source == "Link do YouTube":
+    url = st.text_input(
+        "Link do vídeo do YouTube",
+        placeholder="https://www.youtube.com/watch?v=...",
+    )
+else:
+    uploaded_file = st.file_uploader(
+        "Envie um áudio ou vídeo",
+        type=["mp3", "wav", "m4a", "mp4", "webm", "mov", "mpeg", "mpga"],
+        help="O arquivo será processado localmente no servidor com Whisper.",
+    )
+
 output_name = st.text_input("Nome do arquivo", value="transcricao.txt")
 
 if not output_name.lower().endswith(".txt"):
@@ -170,8 +186,11 @@ if not output_name.lower().endswith(".txt"):
 start = st.button("Iniciar transcrição", type="primary", use_container_width=True)
 
 if start:
-    if not url.strip():
+    if source == "Link do YouTube" and not url.strip():
         st.error("Informe um link do YouTube.")
+        st.stop()
+    if source == "Enviar arquivo" and uploaded_file is None:
+        st.error("Envie um arquivo de áudio ou vídeo.")
         st.stop()
 
     progress_bar = st.progress(0)
@@ -180,8 +199,16 @@ if start:
 
     try:
         with tempfile.TemporaryDirectory(prefix="transcbot_") as temp_dir:
-            status_box.info("Baixando o áudio do YouTube...")
-            audio_path = download_audio(url.strip(), temp_dir)
+            if source == "Link do YouTube":
+                status_box.info("Baixando o áudio do YouTube...")
+                audio_path = download_audio(url.strip(), temp_dir)
+            else:
+                suffix = Path(uploaded_file.name).suffix.lower() or ".bin"
+                audio_path = os.path.join(temp_dir, f"uploaded{suffix}")
+                with open(audio_path, "wb") as output_file:
+                    output_file.write(uploaded_file.getbuffer())
+                status_box.info("Arquivo recebido. Transcrevendo localmente...")
+
             status_box.info("Transcrevendo localmente com Whisper...")
             segments = transcribe_audio(
                 audio_path,
