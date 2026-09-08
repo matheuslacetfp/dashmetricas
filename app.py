@@ -34,25 +34,20 @@ def download_audio(url: str, destination: str) -> str:
     options = {
         "format": "bestaudio/best",
         "outtmpl": output_template,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }
-        ],
         "quiet": True,
         "no_warnings": True,
     }
     with yt_dlp.YoutubeDL(options) as downloader:
         downloader.download([url])
 
-    audio_path = os.path.join(destination, "audio.mp3")
-    if not os.path.isfile(audio_path):
-        raise FileNotFoundError(
-            "O áudio não foi criado. Verifique o FFmpeg e o link informado."
-        )
-    return audio_path
+    downloaded_files = [
+        os.path.join(destination, filename)
+        for filename in os.listdir(destination)
+        if filename.startswith("audio.")
+    ]
+    if not downloaded_files:
+        raise FileNotFoundError("O áudio não foi criado. Verifique o link informado.")
+    return downloaded_files[0]
 
 
 def transcribe_audio(audio_path: str, model_name: str, progress_bar, status_box, text_box):
