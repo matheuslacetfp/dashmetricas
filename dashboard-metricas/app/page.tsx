@@ -182,7 +182,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .order("created_order", { ascending: false })
       .limit(20),
     chartQuery,
-    supabase.from("ad_progress").select("last_ad_id").eq("id", 1).maybeSingle(),
+    supabase
+      .from("ad_progress")
+      .select("last_ad_id, updated_at")
+      .eq("id", 1)
+      .maybeSingle(),
   ]);
 
   const loadError =
@@ -336,16 +340,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           <div className="panel flex flex-col justify-between p-6 sm:p-8">
-            <div className="mb-5">
-              <h2 className="text-lg font-bold">Controle de ADs</h2>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                Atualize o último AD gerado.
+            <div>
+              <p className="text-sm font-semibold text-[var(--muted)]">Último AD gerado</p>
+              <p className="mt-3 break-all font-mono text-3xl font-bold tracking-tight">
+                {adProgressResult.data?.last_ad_id || "—"}
+              </p>
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                {adProgressResult.data?.updated_at
+                  ? `Atualizado em ${new Date(adProgressResult.data.updated_at).toLocaleString("pt-BR", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                      timeZone: "America/Sao_Paulo",
+                    })}`
+                  : "Nenhum AD cadastrado"}
               </p>
             </div>
-            <EditLatestAdForm
-              disabled={adProgressResult.error !== null}
-              lastAdId={adProgressResult.data?.last_ad_id ?? ""}
-            />
+            <div className="mt-6 border-t border-[var(--line)] pt-5">
+              <EditLatestAdForm
+                disabled={adProgressResult.error !== null}
+                lastAdId={adProgressResult.data?.last_ad_id ?? ""}
+              />
+            </div>
           </div>
         </section>
 

@@ -10,7 +10,7 @@ export function EditLatestAdForm({
   return (
     <form action={updateLatestAd} className="flex flex-wrap items-end gap-2">
       <label className="min-w-44 flex-1 text-sm font-semibold">
-        Último AD gerado
+        Editar AD
         <input
           className="field mt-1.5"
           defaultValue={lastAdId}
