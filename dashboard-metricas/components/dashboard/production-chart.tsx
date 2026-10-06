@@ -1,9 +1,10 @@
-import type { ChartPoint } from "@/lib/dashboard-period";
+import type { ChartPoint, Period } from "@/lib/dashboard-period";
 
 type ProductionChartProps = {
   points: ChartPoint[];
   title: string;
   description: string;
+  period: Period;
   comparison?: boolean;
 };
 
@@ -16,6 +17,17 @@ const bottom = 38;
 
 function formatCount(value: number) {
   return new Intl.NumberFormat("pt-BR").format(value);
+}
+
+function formatPointDate(value: string, period: Period) {
+  const date = new Date(`${value}T12:00:00Z`);
+  const monthView = period === "year";
+  return new Intl.DateTimeFormat("pt-BR", {
+    ...(monthView ? {} : { weekday: "short", day: "numeric" }),
+    month: monthView ? "long" : "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 function smoothPath(points: Array<{ x: number; y: number }>) {
@@ -31,19 +43,20 @@ function smoothPath(points: Array<{ x: number; y: number }>) {
 }
 
 function comparisonText(points: ChartPoint[]) {
-  const yesterday = points[0]?.value ?? 0;
-  const today = points[1]?.value ?? 0;
-  const difference = today - yesterday;
+  const previousDay = points[0]?.value ?? 0;
+  const selectedDay = points[1]?.value ?? 0;
+  const difference = selectedDay - previousDay;
 
-  if (difference === 0) return `Mesmo volume de ontem: ${formatCount(today)} cortes.`;
-  if (difference > 0) return `${formatCount(difference)} a mais que ontem.`;
-  return `${formatCount(Math.abs(difference))} a menos que ontem.`;
+  if (difference === 0) return `Mesmo volume do dia anterior: ${formatCount(selectedDay)} cortes.`;
+  if (difference > 0) return `${formatCount(difference)} a mais que no dia anterior.`;
+  return `${formatCount(Math.abs(difference))} a menos que no dia anterior.`;
 }
 
 export function ProductionChart({
   points,
   title,
   description,
+  period,
   comparison = false,
 }: ProductionChartProps) {
   const plotWidth = chartWidth - left - right;
@@ -51,11 +64,25 @@ export function ProductionChart({
   const maxValue = Math.max(1, ...points.map((point) => point.value));
   const gridValues = [...new Set([maxValue, Math.ceil(maxValue / 2), 0])];
   const labelInterval = Math.max(1, Math.ceil(points.length / 12));
-  const plottedPoints = points.map((point, index) => ({
-    point,
-    x: points.length === 1 ? left + plotWidth / 2 : left + (plotWidth * index) / (points.length - 1),
-    y: top + plotHeight - (point.value / maxValue) * plotHeight,
-  }));
+  const tooltipWidth = 208;
+  const tooltipHeight = 46;
+  const plottedPoints = points.map((point, index) => {
+    const x =
+      points.length === 1 ? left + plotWidth / 2 : left + (plotWidth * index) / (points.length - 1);
+    const y = top + plotHeight - (point.value / maxValue) * plotHeight;
+    return {
+      point,
+      x,
+      y,
+      tooltipX: Math.min(
+        Math.max(x - tooltipWidth / 2, left),
+        chartWidth - right - tooltipWidth,
+      ),
+      tooltipY: y >= tooltipHeight + 12 ? y - tooltipHeight - 8 : y + 12,
+      dateLabel: formatPointDate(point.date, period),
+      countLabel: `${formatCount(point.value)} ${point.value === 1 ? "corte" : "cortes"}`,
+    };
+  });
   const linePath = smoothPath(plottedPoints);
   const areaPath =
     plottedPoints.length > 0
@@ -79,10 +106,10 @@ export function ProductionChart({
       <div className="mt-5 overflow-x-auto">
         <svg
           aria-label={`${title}. ${points
-            .map((point) => `${point.label}: ${formatCount(point.value)} cortes`)
+          .map((point) => `${point.label}, ${formatPointDate(point.date, period)}: ${formatCount(point.value)} cortes`)
             .join("; ")}`}
           className="h-auto min-w-[560px] w-full"
-          role="img"
+          role="group"
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
         >
           <defs>
@@ -120,19 +147,41 @@ export function ProductionChart({
           <path className="chart-area" d={areaPath} />
           <path className="chart-line" d={linePath} />
 
-          {plottedPoints.map(({ point, x, y }, index) => {
+          {plottedPoints.map(({ point, x, y, tooltipX, tooltipY, dateLabel, countLabel }, index) => {
             const showLabel =
               points.length <= 12 || index % labelInterval === 0 || index === points.length - 1;
+            const accessibleLabel = `${point.label}, ${dateLabel}: ${countLabel}`;
 
             return (
               <g key={point.date}>
-                <circle
-                  className="chart-point"
-                  cx={x}
-                  cy={y}
-                  r={comparison && index === 1 ? 5 : 3.5}
-                  style={{ animationDelay: `${Math.min(index * 18, 300)}ms` }}
-                />
+                <g
+                  aria-label={accessibleLabel}
+                  className="chart-data-point"
+                  role="img"
+                  tabIndex={0}
+                >
+                  <title>{accessibleLabel}</title>
+                  <circle
+                    className="chart-point"
+                    cx={x}
+                    cy={y}
+                    r={comparison && index === 1 ? 5 : 3.5}
+                    style={{ animationDelay: `${Math.min(index * 18, 300)}ms` }}
+                  />
+                  <g
+                    aria-hidden="true"
+                    className="chart-tooltip"
+                    transform={`translate(${tooltipX} ${tooltipY})`}
+                  >
+                    <rect height={tooltipHeight} rx="8" width={tooltipWidth} x="0" y="0" />
+                    <text className="chart-tooltip-date" x="10" y="18">
+                      {dateLabel}
+                    </text>
+                    <text className="chart-tooltip-count" x="10" y="36">
+                      {countLabel}
+                    </text>
+                  </g>
+                </g>
                 {showLabel && (
                   <text
                     fill="var(--muted)"

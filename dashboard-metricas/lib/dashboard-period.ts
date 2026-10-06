@@ -15,6 +15,17 @@ function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+export function isValidDate(value: string | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && formatDate(date) === value;
+}
+
+export function getSelectedDate(value: string | undefined, now = new Date()) {
+  if (isValidDate(value)) return value;
+  return formatDate(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())));
+}
+
 export function getPeriodBounds(period: Period, now = new Date()) {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   let end: Date;

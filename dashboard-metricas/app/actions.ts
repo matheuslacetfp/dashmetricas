@@ -157,9 +157,11 @@ export async function restoreHistoryPoint(formData: FormData) {
   const cutId = String(formData.get("cut_id") ?? "");
   const requestedPeriod = String(formData.get("period") ?? "");
   const period = periods.has(requestedPeriod) ? requestedPeriod : "month";
+  const requestedDate = String(formData.get("date") ?? "");
+  const dateQuery = validDate(requestedDate) ? `&date=${requestedDate}` : "";
 
   if (!uuidPattern.test(cutId)) {
-    redirect(`/?period=${period}&status=restore_invalid`);
+    redirect(`/?period=${period}${dateQuery}&status=restore_invalid`);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -170,20 +172,20 @@ export async function restoreHistoryPoint(formData: FormData) {
   if (error) {
     console.error("Failed to restore cut history point:", error.message);
     if (error.code === "P0002") {
-      redirect(`/?period=${period}&status=restore_missing`);
+      redirect(`/?period=${period}${dateQuery}&status=restore_missing`);
     }
     if (error.message.includes("restore_cut_history_point")) {
-      redirect(`/?period=${period}&status=restore_schema`);
+      redirect(`/?period=${period}${dateQuery}&status=restore_schema`);
     }
-    redirect(`/?period=${period}&status=restore_error`);
+    redirect(`/?period=${period}${dateQuery}&status=restore_error`);
   }
 
   const count = Number(deletedCount);
   if (!Number.isSafeInteger(count) || count < 0) {
     console.error("Restore history returned an invalid deleted row count:", deletedCount);
-    redirect(`/?period=${period}&status=restore_error`);
+    redirect(`/?period=${period}${dateQuery}&status=restore_error`);
   }
 
   revalidatePath("/");
-  redirect(`/?period=${period}&status=restored&count=${count}`);
+  redirect(`/?period=${period}${dateQuery}&status=restored&count=${count}`);
 }

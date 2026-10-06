@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { clearUserName } from "@/app/actions";
+import { ChartDateSelector } from "@/components/dashboard/chart-date-selector";
 import { CutBatchForm } from "@/components/dashboard/cut-batch-form";
 import { EditLatestIdForm } from "@/components/dashboard/edit-latest-id-form";
 import { HistoryRestoreForm } from "@/components/dashboard/history-restore-form";
@@ -9,9 +10,9 @@ import { UserNameForm } from "@/components/dashboard/user-name-form";
 import {
   buildChartPoints,
   getChartQueryBounds,
+  getSelectedDate,
   getPeriodBounds,
   isPeriod,
-  periodLabels,
   type Period,
 } from "@/lib/dashboard-period";
 import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
@@ -22,6 +23,7 @@ const USER_NAME_COOKIE = "dashboard_user_name";
 type DashboardPageProps = {
   searchParams: Promise<{
     period?: string;
+    date?: string;
     status?: string;
     count?: string;
   }>;
@@ -145,7 +147,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   if (!userName || userName.length > 60) return <NamePrompt status={params.status} />;
 
   const period: Period = isPeriod(params.period) ? params.period : "month";
-  const bounds = getPeriodBounds(period);
+  const selectedDate = getSelectedDate(params.date);
+  const bounds = getPeriodBounds(period, new Date(`${selectedDate}T12:00:00Z`));
   const chartBounds = getChartQueryBounds(period, bounds.start, bounds.end);
   const supabase = await createSupabaseServerClient();
 
@@ -159,7 +162,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .from("cuts")
       .select("id, file_id, rendered_on, created_at")
       .order("created_order", { ascending: false })
-      .limit(100),
+      .limit(20),
     supabase.rpc("get_cut_counts_by_day", {
       start_date: chartBounds.start,
       end_date: chartBounds.end,
@@ -194,10 +197,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ? buildChartPoints(period, bounds.start, chartResult.data)
     : [];
   const chartTitles: Record<Period, { title: string; description: string }> = {
-    day: { title: "Hoje vs. ontem", description: "Comparação de cortes renderizados por dia." },
-    week: { title: "Esta semana", description: "Cortes renderizados em cada dia da semana." },
-    month: { title: "Produção do mês", description: "Cortes renderizados em cada dia do mês." },
-    year: { title: "Produção do ano", description: "Total de cortes renderizados em cada mês." },
+    day: { title: "Dia selecionado vs. anterior", description: "Compare o dia escolhido com o dia anterior." },
+    week: { title: "Semana selecionada", description: "Cortes renderizados em cada dia da semana escolhida." },
+    month: { title: "Produção do mês", description: "Cortes renderizados em cada dia do mês escolhido." },
+    year: { title: "Produção do ano", description: "Total de cortes renderizados em cada mês do ano escolhido." },
   };
 
   return (
@@ -210,9 +213,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
             Olá, {userName}.
           </h1>
-          <p className="mt-2 text-[var(--muted)]">
-            Seus cortes, em números. Registre renderizações e acompanhe seu ritmo.
-          </p>
         </div>
         <form action={clearUserName}>
           <button className="button-secondary" type="submit">
@@ -240,13 +240,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <p className="mt-3 text-6xl font-bold tracking-[-0.06em]">
                   {loadError ? "—" : countResult.count ?? 0}
                 </p>
-                <p className="mt-2 text-sm text-[var(--muted)]">{periodLabels[period]}</p>
+                <p className="mt-2 text-sm text-[var(--muted)]">
+                  {period === "day"
+                    ? "Dia selecionado"
+                    : period === "week"
+                      ? "Semana selecionada"
+                      : period === "month"
+                        ? "Mês selecionado"
+                        : "Ano selecionado"}
+                </p>
               </div>
-              <div>
-                <span className="mb-1.5 block text-xs font-semibold text-[var(--muted)]">
-                  Período
-                </span>
-                <PeriodSelector period={period} />
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <span className="mb-1.5 block text-xs font-semibold text-[var(--muted)]">
+                    Período
+                  </span>
+                  <PeriodSelector period={period} selectedDate={selectedDate} />
+                </div>
+                <ChartDateSelector period={period} selectedDate={selectedDate} />
               </div>
             </div>
             <div className="border-t border-[var(--line)] pt-4 text-sm text-[var(--muted)]">
@@ -277,6 +288,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <ProductionChart
             comparison={period === "day"}
             description={chartTitles[period].description}
+            period={period}
             points={chartPoints}
             title={chartTitles[period].title}
           />
@@ -308,7 +320,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <div>
                 <h2 className="text-lg font-bold">Atividade recente</h2>
                 <p className="mt-1 text-sm text-[var(--muted)]">
-                  Últimos 100 cortes. Resgatar um ponto exclui os registros posteriores.
+                  Últimos 20 cortes. Role a lista para navegar pelos registros; resgatar um ponto
+                  exclui os posteriores.
                 </p>
               </div>
             </div>
@@ -317,9 +330,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 {loadError ? "A atividade não pôde ser carregada." : "Seus registros aparecerão aqui."}
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="history-scroll overflow-x-auto">
                 <table className="w-full min-w-[420px] text-left text-sm">
-                  <thead className="bg-[#11130f] text-xs uppercase tracking-wide text-[var(--muted)]">
+                  <thead className="sticky top-0 z-[1] bg-[#11130f] text-xs uppercase tracking-wide text-[var(--muted)]">
                     <tr>
                       <th className="px-6 py-3 font-semibold">ID do arquivo</th>
                       <th className="px-6 py-3 font-semibold">Renderizado em</th>
@@ -343,6 +356,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                               cutId={cut.id}
                               fileId={cut.file_id}
                               period={period}
+                              selectedDate={selectedDate}
                             />
                           )}
                         </td>

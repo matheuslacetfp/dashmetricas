@@ -4,10 +4,12 @@ export function HistoryRestoreForm({
   cutId,
   fileId,
   period,
+  selectedDate,
 }: {
   cutId: string;
   fileId: string;
   period: string;
+  selectedDate: string;
 }) {
   return (
     <details className="restore-details">
@@ -21,6 +23,7 @@ export function HistoryRestoreForm({
         <form action={restoreHistoryPoint}>
           <input name="cut_id" type="hidden" value={cutId} />
           <input name="period" type="hidden" value={period} />
+          <input name="date" type="hidden" value={selectedDate} />
           <button className="restore-confirm-button" type="submit">
             Confirmar resgate
           </button>

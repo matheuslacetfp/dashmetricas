@@ -11,7 +11,13 @@ const options: Array<{ value: Period; label: string }> = [
   { value: "year", label: "Ano" },
 ];
 
-export function PeriodSelector({ period }: { period: Period }) {
+export function PeriodSelector({
+  period,
+  selectedDate,
+}: {
+  period: Period;
+  selectedDate: string;
+}) {
   const router = useRouter();
   const [activePeriod, setActivePeriod] = useState(period);
   const [isPending, startTransition] = useTransition();
@@ -25,7 +31,7 @@ export function PeriodSelector({ period }: { period: Period }) {
 
     setActivePeriod(nextPeriod);
     startTransition(() => {
-      router.push(`/?period=${nextPeriod}`, { scroll: false });
+      router.push(`/?period=${nextPeriod}&date=${selectedDate}`, { scroll: false });
     });
   }
 
