@@ -29,9 +29,11 @@ const months = [
 export function ChartDateSelector({
   period,
   selectedDate,
+  preserveYearTotals = false,
 }: {
   period: Period;
   selectedDate: string;
+  preserveYearTotals?: boolean;
 }) {
   const router = useRouter();
   const [date, setDate] = useState(selectedDate);
@@ -47,8 +49,9 @@ export function ChartDateSelector({
     const nextDate =
       period === "year" ? `${value}-01-01` : period === "month" ? `${value}-01` : value;
     setDate(nextDate);
+    const yearView = preserveYearTotals ? "&yearView=totals" : "";
     startTransition(() => {
-      router.push(`/?period=${period}&date=${nextDate}`, { scroll: false });
+      router.push(`/?period=${period}&date=${nextDate}${yearView}`, { scroll: false });
     });
   }
 
@@ -67,10 +70,11 @@ export function ChartDateSelector({
       : period === "month"
         ? date.slice(0, 7)
         : date;
+  const fieldLabel = preserveYearTotals ? "Ano do KPI" : dateLabels[period];
 
   return (
     <div className="chart-date-field">
-      <span>{dateLabels[period]}</span>
+      <span>{fieldLabel}</span>
       {period === "month" ? (
         <div aria-busy={isPending} className="chart-month-inputs">
           <select
@@ -98,6 +102,7 @@ export function ChartDateSelector({
       ) : (
         <input
           aria-busy={isPending}
+          aria-label={fieldLabel}
           className="field chart-date-input"
           max={period === "year" ? "9999" : undefined}
           min={period === "year" ? "1900" : undefined}

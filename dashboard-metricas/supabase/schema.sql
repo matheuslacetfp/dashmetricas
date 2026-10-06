@@ -61,6 +61,36 @@ $$;
 revoke all on function public.get_cut_counts_by_day(date, date) from public;
 grant execute on function public.get_cut_counts_by_day(date, date) to anon, authenticated;
 
+create or replace function public.get_cut_counts_by_year()
+returns table (rendered_on date, cut_count bigint)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  with yearly_counts as (
+    select
+      extract(year from cuts.rendered_on)::integer as rendered_year,
+      count(*)::bigint as cut_count
+    from public.cuts
+    group by extract(year from cuts.rendered_on)
+  ),
+  year_bounds as (
+    select min(yearly_counts.rendered_year) as first_year,
+      max(yearly_counts.rendered_year) as last_year
+    from yearly_counts
+  )
+  select make_date(years.rendered_year, 1, 1), coalesce(yearly_counts.cut_count, 0)
+  from year_bounds
+  cross join lateral generate_series(year_bounds.first_year, year_bounds.last_year, 1)
+    as years(rendered_year)
+  left join yearly_counts using (rendered_year)
+  order by years.rendered_year;
+$$;
+
+revoke all on function public.get_cut_counts_by_year() from public;
+grant execute on function public.get_cut_counts_by_year() to anon, authenticated;
+
 create or replace function public.restore_cut_history_point(p_cut_id uuid)
 returns bigint
 language plpgsql

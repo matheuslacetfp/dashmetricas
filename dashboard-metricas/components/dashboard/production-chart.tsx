@@ -6,6 +6,7 @@ type ProductionChartProps = {
   description: string;
   period: Period;
   comparison?: boolean;
+  yearlyTotals?: boolean;
 };
 
 const chartWidth = 760;
@@ -58,6 +59,7 @@ export function ProductionChart({
   description,
   period,
   comparison = false,
+  yearlyTotals = false,
 }: ProductionChartProps) {
   const plotWidth = chartWidth - left - right;
   const plotHeight = chartHeight - top - bottom;
@@ -79,7 +81,7 @@ export function ProductionChart({
         chartWidth - right - tooltipWidth,
       ),
       tooltipY: y >= tooltipHeight + 12 ? y - tooltipHeight - 8 : y + 12,
-      dateLabel: formatPointDate(point.date, period),
+      dateLabel: yearlyTotals ? point.date.slice(0, 4) : formatPointDate(point.date, period),
       countLabel: `${formatCount(point.value)} ${point.value === 1 ? "corte" : "cortes"}`,
     };
   });
@@ -106,7 +108,7 @@ export function ProductionChart({
       <div className="mt-5 overflow-x-auto">
         <svg
           aria-label={`${title}. ${points
-          .map((point) => `${point.label}, ${formatPointDate(point.date, period)}: ${formatCount(point.value)} cortes`)
+          .map((point) => `${point.label}, ${yearlyTotals ? point.date.slice(0, 4) : formatPointDate(point.date, period)}: ${formatCount(point.value)} cortes`)
             .join("; ")}`}
           className="h-auto min-w-[560px] w-full"
           role="group"

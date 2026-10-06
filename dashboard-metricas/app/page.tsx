@@ -8,8 +8,10 @@ import { HistoryRestoreForm } from "@/components/dashboard/history-restore-form"
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { ProductionChart } from "@/components/dashboard/production-chart";
 import { UserNameForm } from "@/components/dashboard/user-name-form";
+import { YearChartModeSelector } from "@/components/dashboard/year-chart-mode-selector";
 import {
   buildChartPoints,
+  buildYearlyTotalPoints,
   getChartQueryBounds,
   getSelectedDate,
   getPeriodBounds,
@@ -25,6 +27,7 @@ type DashboardPageProps = {
   searchParams: Promise<{
     period?: string;
     date?: string;
+    yearView?: string;
     status?: string;
     count?: string;
   }>;
@@ -155,11 +158,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   if (!userName || userName.length > 60) return <NamePrompt status={params.status} />;
 
   const period: Period = isPeriod(params.period) ? params.period : "month";
+  const yearlyTotals = period === "year" && params.yearView === "totals";
   const selectedDate = getSelectedDate(params.date);
   const bounds = getPeriodBounds(period, new Date(`${selectedDate}T12:00:00Z`));
   const chartBounds = getChartQueryBounds(period, bounds.start, bounds.end);
   const supabase = await createSupabaseServerClient();
 
+  const chartQuery = yearlyTotals
+    ? supabase.rpc("get_cut_counts_by_year")
+    : supabase.rpc("get_cut_counts_by_day", {
+        start_date: chartBounds.start,
+        end_date: chartBounds.end,
+      });
   const [countResult, recentResult, chartResult, adProgressResult] = await Promise.all([
     supabase
       .from("cuts")
@@ -171,10 +181,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .select("id, file_id, rendered_on, created_at")
       .order("created_order", { ascending: false })
       .limit(20),
-    supabase.rpc("get_cut_counts_by_day", {
-      start_date: chartBounds.start,
-      end_date: chartBounds.end,
-    }),
+    chartQuery,
     supabase.from("ad_progress").select("last_ad_id").eq("id", 1).maybeSingle(),
   ]);
 
@@ -183,6 +190,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const schemaNeedsUpdate =
     loadError?.message.includes("created_order") === true ||
     loadError?.message.includes("get_cut_counts_by_day") === true ||
+    loadError?.message.includes("get_cut_counts_by_year") === true ||
     loadError?.message.includes("restore_cut_history_point") === true ||
     loadError?.message.includes("ad_progress") === true;
   if (loadError) console.error("Failed to load dashboard data:", loadError.message);
@@ -205,13 +213,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       }
     : { prefix: "corte-", start: 1, padding: 3 };
   const chartPoints = chartResult.data
-    ? buildChartPoints(period, bounds.start, chartResult.data)
+    ? yearlyTotals
+      ? buildYearlyTotalPoints(chartResult.data)
+      : buildChartPoints(period, bounds.start, chartResult.data)
     : [];
   const chartTitles: Record<Period, { title: string; description: string }> = {
     day: { title: "Dia selecionado vs. anterior", description: "Compare o dia escolhido com o dia anterior." },
     week: { title: "Semana selecionada", description: "Cortes renderizados em cada dia da semana escolhida." },
     month: { title: "Produção do mês", description: "Cortes renderizados em cada dia do mês escolhido." },
-    year: { title: "Produção do ano", description: "Total de cortes renderizados em cada mês do ano escolhido." },
+    year: yearlyTotals
+      ? { title: "Total de cortes por ano", description: "Compare os cortes renderizados em cada ano com registros." }
+      : { title: "Produção do ano", description: "Total de cortes renderizados em cada mês do ano escolhido." },
   };
 
   return (
@@ -238,7 +250,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {loadError && (
           <p className="status status-error" role="alert">
             {schemaNeedsUpdate
-              ?               "Atualize o Supabase executando novamente supabase/schema.sql; esta versão inclui a ordem dos lotes, o gráfico, o resgate do histórico e o controle de ADs."
+              ? "Atualize o Supabase executando novamente supabase/schema.sql; esta versão inclui a ordem dos lotes, os gráficos, o resgate do histórico e o controle de ADs."
               : "Não foi possível carregar os dados do Supabase. Atualize a página ou confira a conexão e as permissões da tabela."}
           </p>
         )}
@@ -268,7 +280,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </span>
                   <PeriodSelector period={period} selectedDate={selectedDate} />
                 </div>
-                <ChartDateSelector period={period} selectedDate={selectedDate} />
+                {period === "year" && (
+                  <div>
+                    <span className="mb-1.5 block text-xs font-semibold text-[var(--muted)]">
+                      Visão do gráfico
+                    </span>
+                    <YearChartModeSelector
+                      mode={yearlyTotals ? "totals" : "monthly"}
+                      selectedDate={selectedDate}
+                    />
+                  </div>
+                )}
+                <ChartDateSelector
+                  period={period}
+                  preserveYearTotals={yearlyTotals}
+                  selectedDate={selectedDate}
+                />
               </div>
             </div>
             <div className="border-t border-[var(--line)] pt-4 text-sm text-[var(--muted)]">
@@ -286,6 +313,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             period={period}
             points={chartPoints}
             title={chartTitles[period].title}
+            yearlyTotals={yearlyTotals}
           />
         )}
 

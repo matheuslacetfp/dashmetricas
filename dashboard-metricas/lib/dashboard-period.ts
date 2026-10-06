@@ -77,6 +77,14 @@ export type ChartPoint = {
   date: string;
 };
 
+export function buildYearlyTotalPoints(rows: DailyCount[]): ChartPoint[] {
+  return rows.map((row) => ({
+    label: row.rendered_on.slice(0, 4),
+    value: Number(row.cut_count),
+    date: row.rendered_on,
+  }));
+}
+
 export function buildChartPoints(period: Period, start: string, rows: DailyCount[]): ChartPoint[] {
   const countsByDate = new Map(
     rows.map((row) => [row.rendered_on, Number(row.cut_count)] as const),
