@@ -164,10 +164,45 @@ textarea:focus-visible {
 }
 
 .date-range-values {
-  margin-top: 22px;
-  color: var(--ink);
+  position: relative;
+  height: 20px;
+  margin: 22px 9px 0;
+  color: var(--green-dark);
   font-size: 13px;
   font-weight: 700;
+}
+
+.date-range-values-close {
+  height: 38px;
+}
+
+.date-range-selected-date {
+  position: absolute;
+  white-space: nowrap;
+}
+
+.date-range-selected-start {
+  top: 0;
+}
+
+.date-range-selected-end {
+  top: 0;
+}
+
+.date-range-values-close .date-range-selected-end {
+  top: 19px;
+}
+
+.date-range-label-center {
+  transform: translateX(-50%);
+}
+
+.date-range-label-start {
+  transform: translateX(0);
+}
+
+.date-range-label-end {
+  transform: translateX(-100%);
 }
 
 .date-range-control {

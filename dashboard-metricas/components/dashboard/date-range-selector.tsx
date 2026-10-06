@@ -96,6 +96,11 @@ export function DateRangeSelector({
     "--range-start": `${startPercent}%`,
     "--range-end": `${endPercent}%`,
   } as CSSProperties;
+  const labelsAreClose = endPercent - startPercent < 18;
+  const startLabelPosition =
+    startPercent <= 8 ? "date-range-label-start" : startPercent >= 92 ? "date-range-label-end" : "date-range-label-center";
+  const endLabelPosition =
+    endPercent <= 8 ? "date-range-label-start" : endPercent >= 92 ? "date-range-label-end" : "date-range-label-center";
 
   return (
     <section className="panel date-range-panel" aria-busy={isPending}>
@@ -113,9 +118,22 @@ export function DateRangeSelector({
         )}
       </div>
 
-      <div className="date-range-values" aria-live="polite">
-        <span>{formatRangeDate(fromDayNumber(range.start))}</span>
-        <span>{formatRangeDate(fromDayNumber(range.end))}</span>
+      <div
+        aria-live="polite"
+        className={`date-range-values${labelsAreClose ? " date-range-values-close" : ""}`}
+      >
+        <span
+          className={`date-range-selected-date date-range-selected-start ${startLabelPosition}`}
+          style={{ left: `${startPercent}%` }}
+        >
+          {formatRangeDate(fromDayNumber(range.start))}
+        </span>
+        <span
+          className={`date-range-selected-date date-range-selected-end ${endLabelPosition}`}
+          style={{ left: `${endPercent}%` }}
+        >
+          {formatRangeDate(fromDayNumber(range.end))}
+        </span>
       </div>
 
       <div className="date-range-control" style={trackStyle}>
