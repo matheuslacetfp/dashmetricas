@@ -59,6 +59,16 @@ export function DateRangeSelector({
     setRange(nextRange);
   }
 
+  function updateStart(value: number) {
+    const currentRange = rangeRef.current;
+    updateRange({ ...currentRange, start: Math.min(value, currentRange.end) });
+  }
+
+  function updateEnd(value: number) {
+    const currentRange = rangeRef.current;
+    updateRange({ ...currentRange, end: Math.max(value, currentRange.start) });
+  }
+
   function applyRange() {
     const start = fromDayNumber(rangeRef.current.start);
     const end = fromDayNumber(rangeRef.current.end);
@@ -114,13 +124,12 @@ export function DateRangeSelector({
           aria-label="Início do intervalo do gráfico"
           className="date-range-input date-range-start"
           disabled={minimum === maximum}
-          max={range.end}
+          max={maximum}
           min={minimum}
-          onChange={(event) =>
-            updateRange({ ...range, start: Math.min(Number(event.target.value), range.end) })
-          }
+          onChange={(event) => updateStart(Number(event.target.value))}
           onKeyUp={applyRange}
           onPointerUp={applyRange}
+          step={1}
           type="range"
           value={range.start}
         />
@@ -129,12 +138,11 @@ export function DateRangeSelector({
           className="date-range-input date-range-end"
           disabled={minimum === maximum}
           max={maximum}
-          min={range.start}
-          onChange={(event) =>
-            updateRange({ ...range, end: Math.max(Number(event.target.value), range.start) })
-          }
+          min={minimum}
+          onChange={(event) => updateEnd(Number(event.target.value))}
           onKeyUp={applyRange}
           onPointerUp={applyRange}
+          step={1}
           type="range"
           value={range.end}
         />
