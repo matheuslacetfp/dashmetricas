@@ -153,6 +153,32 @@ export async function updateLatestCutId(formData: FormData) {
   redirect("/?status=updated");
 }
 
+export async function updateLatestAd(formData: FormData) {
+  const lastAdId = String(formData.get("last_ad_id") ?? "").trim();
+
+  if (!lastAdId || lastAdId.length > 100) {
+    redirect("/?status=ad_invalid");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("ad_progress").upsert(
+    { id: 1, last_ad_id: lastAdId, updated_at: new Date().toISOString() },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    console.error("Failed to update latest AD:", error.message);
+    redirect(
+      error.message.includes("ad_progress")
+        ? "/?status=ad_schema"
+        : "/?status=ad_error",
+    );
+  }
+
+  revalidatePath("/");
+  redirect("/?status=ad_updated");
+}
+
 export async function restoreHistoryPoint(formData: FormData) {
   const cutId = String(formData.get("cut_id") ?? "");
   const requestedPeriod = String(formData.get("period") ?? "");

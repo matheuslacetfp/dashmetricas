@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { clearUserName } from "@/app/actions";
 import { ChartDateSelector } from "@/components/dashboard/chart-date-selector";
 import { CutBatchForm } from "@/components/dashboard/cut-batch-form";
+import { EditLatestAdForm } from "@/components/dashboard/edit-latest-ad-form";
 import { EditLatestIdForm } from "@/components/dashboard/edit-latest-id-form";
 import { HistoryRestoreForm } from "@/components/dashboard/history-restore-form";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
@@ -40,6 +41,13 @@ const statusMessages: Record<string, { text: string; kind: "success" | "error" }
     kind: "error",
   },
   updated: { text: "ID do último corte atualizado.", kind: "success" },
+  ad_updated: { text: "Último AD atualizado.", kind: "success" },
+  ad_invalid: { text: "Informe um AD com até 100 caracteres.", kind: "error" },
+  ad_error: { text: "Não foi possível atualizar o último AD. Tente novamente.", kind: "error" },
+  ad_schema: {
+    text: "Execute novamente supabase/schema.sql no Supabase para habilitar o controle de ADs.",
+    kind: "error",
+  },
   duplicate: { text: "Esse ID já está sendo usado por outro corte.", kind: "error" },
   invalid: { text: "Confira os dados informados e tente novamente.", kind: "error" },
   batch_invalid: { text: "Confira a lista, a quantidade e os IDs do lote e tente novamente.", kind: "error" },
@@ -152,7 +160,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const chartBounds = getChartQueryBounds(period, bounds.start, bounds.end);
   const supabase = await createSupabaseServerClient();
 
-  const [countResult, recentResult, chartResult] = await Promise.all([
+  const [countResult, recentResult, chartResult, adProgressResult] = await Promise.all([
     supabase
       .from("cuts")
       .select("id", { count: "exact", head: true })
@@ -167,13 +175,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       start_date: chartBounds.start,
       end_date: chartBounds.end,
     }),
+    supabase.from("ad_progress").select("last_ad_id").eq("id", 1).maybeSingle(),
   ]);
 
-  const loadError = countResult.error ?? recentResult.error ?? chartResult.error;
+  const loadError =
+    countResult.error ?? recentResult.error ?? chartResult.error ?? adProgressResult.error;
   const schemaNeedsUpdate =
     loadError?.message.includes("created_order") === true ||
     loadError?.message.includes("get_cut_counts_by_day") === true ||
-    loadError?.message.includes("restore_cut_history_point") === true;
+    loadError?.message.includes("restore_cut_history_point") === true ||
+    loadError?.message.includes("ad_progress") === true;
   if (loadError) console.error("Failed to load dashboard data:", loadError.message);
 
   const recentCuts = recentResult.data ?? [];
@@ -227,12 +238,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {loadError && (
           <p className="status status-error" role="alert">
             {schemaNeedsUpdate
-              ? "Atualize o Supabase executando novamente supabase/schema.sql; esta versão inclui a ordem dos lotes, o gráfico e o resgate do histórico."
+              ?               "Atualize o Supabase executando novamente supabase/schema.sql; esta versão inclui a ordem dos lotes, o gráfico, o resgate do histórico e o controle de ADs."
               : "Não foi possível carregar os dados do Supabase. Atualize a página ou confira a conexão e as permissões da tabela."}
           </p>
         )}
 
-        <section className="grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
+        <section className="grid items-start gap-5 lg:grid-cols-[1.25fr_0.75fr]">
           <div className="panel flex flex-col justify-between gap-8 p-6 sm:p-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -266,21 +277,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
 
-          <div className="panel flex flex-col justify-between p-6 sm:p-8">
-            <div>
-              <p className="text-sm font-semibold text-[var(--muted)]">Último ID gerado</p>
-              <p className="mt-3 break-all font-mono text-3xl font-bold tracking-tight">
-                {latestCut?.file_id ?? "—"}
-              </p>
-              <p className="mt-2 text-sm text-[var(--muted)]">
-                {latestCut ? `Registrado em ${formatDate(latestCut.rendered_on)}` : "Nenhum corte cadastrado"}
-              </p>
-            </div>
-            {latestCut && (
-              <div className="mt-6 border-t border-[var(--line)] pt-5">
-                <EditLatestIdForm cutId={latestCut.id} currentFileId={latestCut.file_id} />
+          <div className="grid gap-5">
+            <div className="panel flex flex-col justify-between p-6 sm:p-8">
+              <div>
+                <p className="text-sm font-semibold text-[var(--muted)]">Último ID gerado</p>
+                <p className="mt-3 break-all font-mono text-3xl font-bold tracking-tight">
+                  {latestCut?.file_id ?? "—"}
+                </p>
+                <p className="mt-2 text-sm text-[var(--muted)]">
+                  {latestCut ? `Registrado em ${formatDate(latestCut.rendered_on)}` : "Nenhum corte cadastrado"}
+                </p>
               </div>
-            )}
+              {latestCut && (
+                <div className="mt-6 border-t border-[var(--line)] pt-5">
+                  <EditLatestIdForm cutId={latestCut.id} currentFileId={latestCut.file_id} />
+                </div>
+              )}
+            </div>
+
+            <div className="panel p-6 sm:p-8">
+              <div className="mb-5">
+                <h2 className="text-lg font-bold">Controle de ADs</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Atualize o último AD gerado.
+                </p>
+              </div>
+              <EditLatestAdForm
+                disabled={adProgressResult.error !== null}
+                lastAdId={adProgressResult.data?.last_ad_id ?? ""}
+              />
+            </div>
           </div>
         </section>
 

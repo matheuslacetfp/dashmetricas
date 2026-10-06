@@ -13,6 +13,36 @@ alter table public.cuts
 
 create unique index if not exists cuts_created_order_key on public.cuts (created_order);
 
+create table if not exists public.ad_progress (
+  id smallint primary key default 1 check (id = 1),
+  last_ad_id text not null default '' check (char_length(trim(last_ad_id)) between 0 and 100),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.ad_progress enable row level security;
+
+drop policy if exists "Anyone can read AD progress" on public.ad_progress;
+drop policy if exists "Anyone can create AD progress" on public.ad_progress;
+drop policy if exists "Anyone can update AD progress" on public.ad_progress;
+
+create policy "Anyone can read AD progress"
+  on public.ad_progress for select
+  to anon, authenticated
+  using (true);
+
+create policy "Anyone can create AD progress"
+  on public.ad_progress for insert
+  to anon, authenticated
+  with check (id = 1);
+
+create policy "Anyone can update AD progress"
+  on public.ad_progress for update
+  to anon, authenticated
+  using (id = 1)
+  with check (id = 1);
+
+grant select, insert, update on public.ad_progress to anon, authenticated;
+
 create or replace function public.get_cut_counts_by_day(start_date date, end_date date)
 returns table (rendered_on date, cut_count bigint)
 language sql
