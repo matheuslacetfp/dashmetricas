@@ -138,6 +138,20 @@ textarea:focus-visible {
   filter: invert(85%) sepia(62%) saturate(560%) hue-rotate(28deg);
 }
 
+.chart-month-inputs {
+  display: flex;
+  gap: 8px;
+}
+
+.chart-month-select {
+  min-width: 132px;
+  flex: 1;
+}
+
+.chart-month-year {
+  width: 88px;
+}
+
 .history-scroll {
   max-height: 34rem;
   overflow-y: auto;

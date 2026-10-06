@@ -11,6 +11,21 @@ const dateLabels: Record<Period, string> = {
   year: "Ano observado",
 };
 
+const months = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
 export function ChartDateSelector({
   period,
   selectedDate,
@@ -37,6 +52,15 @@ export function ChartDateSelector({
     });
   }
 
+  function changeMonth(month: string) {
+    changeDate(`${date.slice(0, 4)}-${month}`);
+  }
+
+  function changeMonthYear(year: string) {
+    if (!/^\d{4}$/.test(year)) return;
+    changeDate(`${year}-${date.slice(5, 7)}`);
+  }
+
   const inputValue =
     period === "year"
       ? date.slice(0, 4)
@@ -45,17 +69,43 @@ export function ChartDateSelector({
         : date;
 
   return (
-    <label className="chart-date-field">
+    <div className="chart-date-field">
       <span>{dateLabels[period]}</span>
-      <input
-        aria-busy={isPending}
-        className="field chart-date-input"
-        max={period === "year" ? "9999" : undefined}
-        min={period === "year" ? "1900" : undefined}
-        onChange={(event) => changeDate(event.target.value)}
-        type={period === "year" ? "number" : period === "month" ? "month" : "date"}
-        value={inputValue}
-      />
-    </label>
+      {period === "month" ? (
+        <div aria-busy={isPending} className="chart-month-inputs">
+          <select
+            aria-label="Mês observado"
+            className="field chart-month-select"
+            onChange={(event) => changeMonth(event.target.value)}
+            value={date.slice(5, 7)}
+          >
+            {months.map((month, index) => (
+              <option key={month} value={String(index + 1).padStart(2, "0")}>
+                {month}
+              </option>
+            ))}
+          </select>
+          <input
+            aria-label="Ano observado"
+            className="field chart-month-year"
+            max="9999"
+            min="1900"
+            onChange={(event) => changeMonthYear(event.target.value)}
+            type="number"
+            value={date.slice(0, 4)}
+          />
+        </div>
+      ) : (
+        <input
+          aria-busy={isPending}
+          className="field chart-date-input"
+          max={period === "year" ? "9999" : undefined}
+          min={period === "year" ? "1900" : undefined}
+          onChange={(event) => changeDate(event.target.value)}
+          type={period === "year" ? "number" : "date"}
+          value={inputValue}
+        />
+      )}
+    </div>
   );
 }
