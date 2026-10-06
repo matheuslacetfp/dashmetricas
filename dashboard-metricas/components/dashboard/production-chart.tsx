@@ -1,4 +1,4 @@
-import type { ChartPoint, Period } from "@/lib/dashboard-period";
+import type { ChartPoint, Period, RangeGranularity } from "@/lib/dashboard-period";
 
 type ProductionChartProps = {
   points: ChartPoint[];
@@ -7,6 +7,7 @@ type ProductionChartProps = {
   period: Period;
   comparison?: boolean;
   yearlyTotals?: boolean;
+  rangeGranularity?: RangeGranularity;
 };
 
 const chartWidth = 760;
@@ -20,9 +21,22 @@ function formatCount(value: number) {
   return new Intl.NumberFormat("pt-BR").format(value);
 }
 
-function formatPointDate(value: string, period: Period) {
+function formatPointDate(
+  value: string,
+  period: Period,
+  rangeGranularity?: RangeGranularity,
+) {
   const date = new Date(`${value}T12:00:00Z`);
-  const monthView = period === "year";
+  if (rangeGranularity === "year") return value.slice(0, 4);
+  if (rangeGranularity === "month") {
+    return new Intl.DateTimeFormat("pt-BR", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(date);
+  }
+
+  const monthView = period === "year" && rangeGranularity === undefined;
   return new Intl.DateTimeFormat("pt-BR", {
     ...(monthView ? {} : { weekday: "short", day: "numeric" }),
     month: monthView ? "long" : "short",
@@ -60,6 +74,7 @@ export function ProductionChart({
   period,
   comparison = false,
   yearlyTotals = false,
+  rangeGranularity,
 }: ProductionChartProps) {
   const plotWidth = chartWidth - left - right;
   const plotHeight = chartHeight - top - bottom;
@@ -81,7 +96,9 @@ export function ProductionChart({
         chartWidth - right - tooltipWidth,
       ),
       tooltipY: y >= tooltipHeight + 12 ? y - tooltipHeight - 8 : y + 12,
-      dateLabel: yearlyTotals ? point.date.slice(0, 4) : formatPointDate(point.date, period),
+      dateLabel: yearlyTotals
+        ? point.date.slice(0, 4)
+        : formatPointDate(point.date, period, rangeGranularity),
       countLabel: `${formatCount(point.value)} ${point.value === 1 ? "corte" : "cortes"}`,
     };
   });
@@ -108,7 +125,7 @@ export function ProductionChart({
       <div className="mt-5 overflow-x-auto">
         <svg
           aria-label={`${title}. ${points
-          .map((point) => `${point.label}, ${yearlyTotals ? point.date.slice(0, 4) : formatPointDate(point.date, period)}: ${formatCount(point.value)} cortes`)
+            .map((point) => `${point.label}, ${yearlyTotals ? point.date.slice(0, 4) : formatPointDate(point.date, period, rangeGranularity)}: ${formatCount(point.value)} cortes`)
             .join("; ")}`}
           className="h-auto min-w-[560px] w-full"
           role="group"

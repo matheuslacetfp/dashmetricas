@@ -12,6 +12,7 @@ alter table public.cuts
   add column if not exists created_order bigint generated always as identity;
 
 create unique index if not exists cuts_created_order_key on public.cuts (created_order);
+create index if not exists cuts_rendered_on_idx on public.cuts (rendered_on);
 
 create table if not exists public.ad_progress (
   id smallint primary key default 1 check (id = 1),
@@ -60,6 +61,52 @@ $$;
 
 revoke all on function public.get_cut_counts_by_day(date, date) from public;
 grant execute on function public.get_cut_counts_by_day(date, date) to anon, authenticated;
+
+create or replace function public.get_cut_date_bounds()
+returns table (earliest_date date, latest_date date)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select
+    coalesce(min(cuts.rendered_on), current_date),
+    greatest(coalesce(max(cuts.rendered_on), current_date), current_date)
+  from public.cuts;
+$$;
+
+revoke all on function public.get_cut_date_bounds() from public;
+grant execute on function public.get_cut_date_bounds() to anon, authenticated;
+
+create or replace function public.get_cut_counts_by_range(
+  start_date date,
+  end_date date,
+  granularity text
+)
+returns table (rendered_on date, cut_count bigint)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select
+    case granularity
+      when 'year' then date_trunc('year', cuts.rendered_on::timestamp)::date
+      when 'month' then date_trunc('month', cuts.rendered_on::timestamp)::date
+      when 'week' then date_trunc('week', cuts.rendered_on::timestamp)::date
+      when 'day' then cuts.rendered_on
+    end,
+    count(*)::bigint
+  from public.cuts
+  where cuts.rendered_on >= start_date
+    and cuts.rendered_on < end_date
+    and granularity in ('year', 'month', 'week', 'day')
+  group by 1
+  order by 1;
+$$;
+
+revoke all on function public.get_cut_counts_by_range(date, date, text) from public;
+grant execute on function public.get_cut_counts_by_range(date, date, text) to anon, authenticated;
 
 create or replace function public.get_cut_counts_by_year()
 returns table (rendered_on date, cut_count bigint)

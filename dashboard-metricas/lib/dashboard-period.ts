@@ -77,6 +77,72 @@ export type ChartPoint = {
   date: string;
 };
 
+export type RangeGranularity = "day" | "week" | "month" | "year";
+
+function parseDate(value: string) {
+  return new Date(`${value}T00:00:00Z`);
+}
+
+export function addDateDays(value: string, days: number) {
+  const date = parseDate(value);
+  date.setUTCDate(date.getUTCDate() + days);
+  return formatDate(date);
+}
+
+function getRangeBucketDate(value: string, granularity: RangeGranularity) {
+  const date = parseDate(value);
+  if (granularity === "year") date.setUTCMonth(0, 1);
+  if (granularity === "month") date.setUTCDate(1);
+  if (granularity === "week") date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+  return formatDate(date);
+}
+
+export function getRangeGranularity(start: string, end: string): RangeGranularity {
+  const days =
+    (parseDate(end).getTime() - parseDate(start).getTime()) / 86_400_000 + 1;
+  if (days > 730) return "year";
+  if (days > 90) return "month";
+  if (days > 14) return "week";
+  return "day";
+}
+
+export function buildRangeChartPoints(
+  start: string,
+  end: string,
+  granularity: RangeGranularity,
+  rows: DailyCount[],
+): ChartPoint[] {
+  const countsByDate = new Map(rows.map((row) => [row.rendered_on, Number(row.cut_count)] as const));
+  const points: ChartPoint[] = [];
+  let bucketDate = getRangeBucketDate(start, granularity);
+  const lastBucketDate = getRangeBucketDate(end, granularity);
+  const monthFormatter = new Intl.DateTimeFormat("pt-BR", {
+    month: "short",
+    timeZone: "UTC",
+  });
+
+  while (bucketDate <= lastBucketDate) {
+    const date = parseDate(bucketDate);
+    const label =
+      granularity === "year"
+        ? bucketDate.slice(0, 4)
+        : granularity === "month"
+          ? `${monthFormatter.format(new Date(`${bucketDate}T12:00:00Z`)).replace(".", "")}/${bucketDate.slice(2, 4)}`
+          : granularity === "week"
+            ? `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}`
+            : String(date.getUTCDate());
+
+    points.push({ label, value: countsByDate.get(bucketDate) ?? 0, date: bucketDate });
+
+    if (granularity === "year") date.setUTCFullYear(date.getUTCFullYear() + 1);
+    else if (granularity === "month") date.setUTCMonth(date.getUTCMonth() + 1);
+    else date.setUTCDate(date.getUTCDate() + (granularity === "week" ? 7 : 1));
+    bucketDate = formatDate(date);
+  }
+
+  return points;
+}
+
 export function buildYearlyTotalPoints(rows: DailyCount[]): ChartPoint[] {
   return rows.map((row) => ({
     label: row.rendered_on.slice(0, 4),

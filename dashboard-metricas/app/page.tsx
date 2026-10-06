@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { clearUserName } from "@/app/actions";
 import { ChartDateSelector } from "@/components/dashboard/chart-date-selector";
 import { CutBatchForm } from "@/components/dashboard/cut-batch-form";
+import { DateRangeSelector } from "@/components/dashboard/date-range-selector";
 import { EditLatestAdForm } from "@/components/dashboard/edit-latest-ad-form";
 import { EditLatestIdForm } from "@/components/dashboard/edit-latest-id-form";
 import { HistoryRestoreForm } from "@/components/dashboard/history-restore-form";
@@ -10,12 +11,17 @@ import { ProductionChart } from "@/components/dashboard/production-chart";
 import { UserNameForm } from "@/components/dashboard/user-name-form";
 import { YearChartModeSelector } from "@/components/dashboard/year-chart-mode-selector";
 import {
+  addDateDays,
+  buildRangeChartPoints,
   buildChartPoints,
   buildYearlyTotalPoints,
   getChartQueryBounds,
+  getRangeGranularity,
   getSelectedDate,
   getPeriodBounds,
+  isValidDate,
   isPeriod,
+  type RangeGranularity,
   type Period,
 } from "@/lib/dashboard-period";
 import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
@@ -28,6 +34,8 @@ type DashboardPageProps = {
     period?: string;
     date?: string;
     yearView?: string;
+    chartStart?: string;
+    chartEnd?: string;
     status?: string;
     count?: string;
   }>;
@@ -164,13 +172,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const chartBounds = getChartQueryBounds(period, bounds.start, bounds.end);
   const supabase = await createSupabaseServerClient();
 
-  const chartQuery = yearlyTotals
-    ? supabase.rpc("get_cut_counts_by_year")
-    : supabase.rpc("get_cut_counts_by_day", {
-        start_date: chartBounds.start,
-        end_date: chartBounds.end,
-      });
-  const [countResult, recentResult, chartResult, adProgressResult] = await Promise.all([
+  const [dateBoundsResult, countResult, recentResult, adProgressResult] = await Promise.all([
+    supabase.rpc("get_cut_date_bounds"),
     supabase
       .from("cuts")
       .select("id", { count: "exact", head: true })
@@ -181,7 +184,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .select("id, file_id, rendered_on, created_at")
       .order("created_order", { ascending: false })
       .limit(20),
-    chartQuery,
     supabase
       .from("ad_progress")
       .select("last_ad_id, updated_at")
@@ -189,9 +191,54 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .maybeSingle(),
   ]);
 
+  const dateBounds = dateBoundsResult.data?.[0] ?? {
+    earliest_date: selectedDate,
+    latest_date: selectedDate,
+  };
+  const requestedRangeStart = isValidDate(params.chartStart) ? params.chartStart : undefined;
+  const requestedRangeEnd = isValidDate(params.chartEnd) ? params.chartEnd : undefined;
+  const rangeActive =
+    requestedRangeStart !== undefined &&
+    requestedRangeEnd !== undefined &&
+    requestedRangeStart <= requestedRangeEnd &&
+    requestedRangeStart >= dateBounds.earliest_date &&
+    requestedRangeEnd <= dateBounds.latest_date;
+  const clampDate = (value: string) =>
+    value < dateBounds.earliest_date
+      ? dateBounds.earliest_date
+      : value > dateBounds.latest_date
+        ? dateBounds.latest_date
+        : value;
+  const rangeStart = rangeActive
+    ? requestedRangeStart
+    : clampDate(period === "day" ? chartBounds.start : bounds.start);
+  const rangeEnd = rangeActive
+    ? requestedRangeEnd
+    : clampDate(bounds.lastDay);
+  const rangeGranularity = getRangeGranularity(rangeStart, rangeEnd);
+  const chartQuery = rangeActive
+    ? supabase.rpc("get_cut_counts_by_range", {
+        start_date: rangeStart,
+        end_date: addDateDays(rangeEnd, 1),
+        granularity: rangeGranularity,
+      })
+    : yearlyTotals
+      ? supabase.rpc("get_cut_counts_by_year")
+      : supabase.rpc("get_cut_counts_by_day", {
+          start_date: chartBounds.start,
+          end_date: chartBounds.end,
+        });
+  const chartResult = await chartQuery;
+
   const loadError =
-    countResult.error ?? recentResult.error ?? chartResult.error ?? adProgressResult.error;
+    dateBoundsResult.error ??
+    countResult.error ??
+    recentResult.error ??
+    chartResult.error ??
+    adProgressResult.error;
   const schemaNeedsUpdate =
+    loadError?.message.includes("get_cut_date_bounds") === true ||
+    loadError?.message.includes("get_cut_counts_by_range") === true ||
     loadError?.message.includes("created_order") === true ||
     loadError?.message.includes("get_cut_counts_by_day") === true ||
     loadError?.message.includes("get_cut_counts_by_year") === true ||
@@ -217,10 +264,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       }
     : { prefix: "corte-", start: 1, padding: 3 };
   const chartPoints = chartResult.data
-    ? yearlyTotals
-      ? buildYearlyTotalPoints(chartResult.data)
-      : buildChartPoints(period, bounds.start, chartResult.data)
+    ? rangeActive
+      ? buildRangeChartPoints(rangeStart, rangeEnd, rangeGranularity, chartResult.data)
+      : yearlyTotals
+        ? buildYearlyTotalPoints(chartResult.data)
+        : buildChartPoints(period, bounds.start, chartResult.data)
     : [];
+  const granularityLabels: Record<RangeGranularity, string> = {
+    day: "dias",
+    week: "semanas",
+    month: "meses",
+    year: "anos",
+  };
   const chartTitles: Record<Period, { title: string; description: string }> = {
     day: { title: "Dia selecionado vs. anterior", description: "Compare o dia escolhido com o dia anterior." },
     week: { title: "Semana selecionada", description: "Cortes renderizados em cada dia da semana escolhida." },
@@ -229,6 +284,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       ? { title: "Total de cortes por ano", description: "Compare os cortes renderizados em cada ano com registros." }
       : { title: "Produção do ano", description: "Total de cortes renderizados em cada mês do ano escolhido." },
   };
+  const chartTitle = rangeActive
+    ? {
+        title: "Produção no intervalo",
+        description: `Cortes de ${formatDate(rangeStart)} a ${formatDate(rangeEnd)}, agrupados por ${granularityLabels[rangeGranularity]}.`,
+      }
+    : chartTitles[period];
 
   return (
     <main className="page-enter mx-auto min-h-screen max-w-7xl px-5 py-8 sm:px-8 lg:py-12">
@@ -254,7 +315,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {loadError && (
           <p className="status status-error" role="alert">
             {schemaNeedsUpdate
-              ? "Atualize o Supabase executando novamente supabase/schema.sql; esta versão inclui a ordem dos lotes, os gráficos, o resgate do histórico e o controle de ADs."
+              ? "Atualize o Supabase executando novamente supabase/schema.sql; esta versão inclui a ordem dos lotes, os gráficos e o zoom por intervalo, o resgate do histórico e o controle de ADs."
               : "Não foi possível carregar os dados do Supabase. Atualize a página ou confira a conexão e as permissões da tabela."}
           </p>
         )}
@@ -313,11 +374,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {chartPoints.length > 0 && (
           <ProductionChart
             comparison={period === "day"}
-            description={chartTitles[period].description}
+            description={chartTitle.description}
             period={period}
             points={chartPoints}
-            title={chartTitles[period].title}
-            yearlyTotals={yearlyTotals}
+            rangeGranularity={rangeActive ? rangeGranularity : undefined}
+            title={chartTitle.title}
+            yearlyTotals={!rangeActive && yearlyTotals}
+          />
+        )}
+
+        {dateBoundsResult.data?.[0] && (
+          <DateRangeSelector
+            active={rangeActive}
+            earliestDate={dateBounds.earliest_date}
+            initialEnd={rangeEnd}
+            initialStart={rangeStart}
+            latestDate={dateBounds.latest_date}
+            period={period}
+            selectedDate={selectedDate}
           />
         )}
 
