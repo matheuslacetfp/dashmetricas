@@ -243,7 +243,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </p>
         )}
 
-        <section className="grid items-start gap-5 lg:grid-cols-[1.25fr_0.75fr]">
+        <section>
           <div className="panel flex flex-col justify-between gap-8 p-6 sm:p-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -277,37 +277,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
 
-          <div className="grid gap-5">
-            <div className="panel flex flex-col justify-between p-6 sm:p-8">
-              <div>
-                <p className="text-sm font-semibold text-[var(--muted)]">Último ID gerado</p>
-                <p className="mt-3 break-all font-mono text-3xl font-bold tracking-tight">
-                  {latestCut?.file_id ?? "—"}
-                </p>
-                <p className="mt-2 text-sm text-[var(--muted)]">
-                  {latestCut ? `Registrado em ${formatDate(latestCut.rendered_on)}` : "Nenhum corte cadastrado"}
-                </p>
-              </div>
-              {latestCut && (
-                <div className="mt-6 border-t border-[var(--line)] pt-5">
-                  <EditLatestIdForm cutId={latestCut.id} currentFileId={latestCut.file_id} />
-                </div>
-              )}
-            </div>
-
-            <div className="panel p-6 sm:p-8">
-              <div className="mb-5">
-                <h2 className="text-lg font-bold">Controle de ADs</h2>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  Atualize o último AD gerado.
-                </p>
-              </div>
-              <EditLatestAdForm
-                disabled={adProgressResult.error !== null}
-                lastAdId={adProgressResult.data?.last_ad_id ?? ""}
-              />
-            </div>
-          </div>
         </section>
 
         {chartPoints.length > 0 && (
@@ -319,6 +288,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             title={chartTitles[period].title}
           />
         )}
+
+        <section className="grid gap-5 lg:grid-cols-2">
+          <div className="panel flex flex-col justify-between p-6 sm:p-8">
+            <div>
+              <p className="text-sm font-semibold text-[var(--muted)]">Último ID gerado</p>
+              <p className="mt-3 break-all font-mono text-3xl font-bold tracking-tight">
+                {latestCut?.file_id ?? "—"}
+              </p>
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                {latestCut ? `Registrado em ${formatDate(latestCut.rendered_on)}` : "Nenhum corte cadastrado"}
+              </p>
+            </div>
+            {latestCut && (
+              <div className="mt-6 border-t border-[var(--line)] pt-5">
+                <EditLatestIdForm cutId={latestCut.id} currentFileId={latestCut.file_id} />
+              </div>
+            )}
+          </div>
+
+          <div className="panel flex flex-col justify-between p-6 sm:p-8">
+            <div className="mb-5">
+              <h2 className="text-lg font-bold">Controle de ADs</h2>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Atualize o último AD gerado.
+              </p>
+            </div>
+            <EditLatestAdForm
+              disabled={adProgressResult.error !== null}
+              lastAdId={adProgressResult.data?.last_ad_id ?? ""}
+            />
+          </div>
+        </section>
 
         <section className="grid items-start gap-5 lg:grid-cols-[0.8fr_1.2fr]">
           <div className="panel p-6 sm:p-7">
