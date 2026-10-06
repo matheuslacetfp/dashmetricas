@@ -1,0 +1,95 @@
+create extension if not exists "pgcrypto";
+
+create table if not exists public.cuts (
+  id uuid primary key default gen_random_uuid(),
+  file_id text not null unique check (char_length(trim(file_id)) between 1 and 100),
+  rendered_on date not null default current_date,
+  created_at timestamptz not null default now(),
+  created_order bigint generated always as identity
+);
+
+alter table public.cuts
+  add column if not exists created_order bigint generated always as identity;
+
+create unique index if not exists cuts_created_order_key on public.cuts (created_order);
+
+create or replace function public.get_cut_counts_by_day(start_date date, end_date date)
+returns table (rendered_on date, cut_count bigint)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select cuts.rendered_on, count(*)::bigint
+  from public.cuts
+  where cuts.rendered_on >= start_date
+    and cuts.rendered_on < end_date
+  group by cuts.rendered_on
+  order by cuts.rendered_on;
+$$;
+
+revoke all on function public.get_cut_counts_by_day(date, date) from public;
+grant execute on function public.get_cut_counts_by_day(date, date) to anon, authenticated;
+
+create or replace function public.restore_cut_history_point(p_cut_id uuid)
+returns bigint
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  selected_order bigint;
+  deleted_count bigint;
+begin
+  lock table public.cuts in share row exclusive mode;
+
+  select cuts.created_order
+  into selected_order
+  from public.cuts
+  where cuts.id = p_cut_id;
+
+  if selected_order is null then
+    raise exception 'Selected history point does not exist'
+      using errcode = 'P0002';
+  end if;
+
+  delete from public.cuts as later_cuts
+  where later_cuts.created_order > selected_order;
+
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+revoke all on function public.restore_cut_history_point(uuid) from public;
+grant execute on function public.restore_cut_history_point(uuid) to anon, authenticated;
+
+alter table public.cuts enable row level security;
+
+drop policy if exists "Authenticated users can read cuts" on public.cuts;
+drop policy if exists "Authenticated users can create cuts" on public.cuts;
+drop policy if exists "Authenticated users can update cuts" on public.cuts;
+drop policy if exists "Anyone can read cuts" on public.cuts;
+drop policy if exists "Anyone can create cuts" on public.cuts;
+drop policy if exists "Anyone can update cuts" on public.cuts;
+drop policy if exists "Anyone can delete cuts" on public.cuts;
+
+create policy "Anyone can read cuts"
+  on public.cuts for select
+  to anon, authenticated
+  using (true);
+
+create policy "Anyone can create cuts"
+  on public.cuts for insert
+  to anon, authenticated
+  with check (true);
+
+create policy "Anyone can update cuts"
+  on public.cuts for update
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+revoke delete on public.cuts from anon, authenticated;
+grant select, insert, update on public.cuts to anon, authenticated;
